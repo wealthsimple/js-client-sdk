@@ -1,8 +1,9 @@
 import semverCompare from 'semver-compare';
 
-import LDClient from '../index';
-import messages from '../messages';
-import btoa from '../utils';
+var LDClient = require('../index');
+var messages = require('../messages');
+var errors = require('../errors');
+var base64Encode = require('../utils').btoa;
 
 describe('LDClient', function() {
   var xhr;
@@ -39,38 +40,89 @@ describe('LDClient', function() {
   });
 
   describe('initialization', function() {
-    it('should resolve waitUntilReady promise when ready', function(done) {
-      var user = { key: 'user' };
+    it('should trigger the ready event', function(done) {
+      var user = {key: 'user'};
       var handleReady = sinon.spy();
       var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-        bootstrap: {},
+        bootstrap: {}
       });
-      client.waitUntilReady().then(handleReady);
 
-      client.on('ready', function() {
-        setTimeout(function() {
-          expect(handleReady.called).to.be.true;
-          done();
+      client.on('ready', handleReady);
+
+      setTimeout(function() {
+        expect(handleReady.called).to.be.true;
+        done();
+      }, 0);
+    });
+
+    describe('waitUntilReady', function() {
+      it('should resolve waitUntilReady promise when ready', function(done) {
+        var user = {key: 'user'};
+        var handleReady = sinon.spy();
+        var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+          bootstrap: {}
+        });
+
+        client.waitUntilReady().then(handleReady);
+  
+        client.on('ready', function() {
+          setTimeout(function() {
+            expect(handleReady.called).to.be.true;
+            done();
+          }, 0);
+        });
+      });
+  
+      it('should resolve waitUntilReady promise after ready event was already emitted', function(done) {
+        var user = { key: 'user' };
+        var handleInitialReady = sinon.spy();
+        var handleReady = sinon.spy();
+        var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+          bootstrap: {}
+        });
+  
+        client.on('ready', handleInitialReady);
+  
+        setTimeout(function () {
+          client.waitUntilReady().then(handleReady);
+  
+          setTimeout(function () {
+            expect(handleInitialReady.called).to.be.true;
+            expect(handleReady.called).to.be.true;
+            done();
+          }, 0);
         }, 0);
       });
     });
 
-    it('should log an error when initialize is called without an environment key', function(done) {
-      var user = { key: 'user' };
-      var errorSpy = sinon.spy(console, 'error');
-      var client = LDClient.initialize('', user);
-      expect(
-        errorSpy.calledWith(
-          'No environment specified. Please see https://docs.launchdarkly.com/docs/js-sdk-reference#section-initializing-the-client for instructions on SDK initialization.'
-        )
-      ).to.be.true;
-      errorSpy.restore();
-      done();
+    it('should emit an error when initialize is called without an environment key', function(done) {
+      var user = {key: 'user'};
+      var client = LDClient.initialize('', user,  {
+        bootstrap: {}
+      });
+      client.on('error', function(err) {
+        expect(err.message).to.be.equal(messages.environmentNotSpecified());
+        done();
+      });
     });
 
-    it('should trigger the ready event', function(done) {
-      var user = { key: 'user' };
-      var handleReady = sinon.spy();
+    it('should emit an error when an invalid environment key is specified', function() {
+      var user = {key: 'user'};
+
+      var server = sinon.fakeServer.create();
+      server.respondWith(function(req) {
+        req.respond(404);
+      });
+      var client = LDClient.initialize('abc', user);
+      server.respond();
+      client.on('error', function(err) {
+        expect(err.message).to.be.equal(messages.environmentNotFound());
+        done();
+      });
+    })
+
+    it('should not fetch flag settings since bootstrap is provided', function() {
+      var user = {key: 'user'};
       var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: {},
       });
@@ -225,8 +277,9 @@ describe('LDClient', function() {
       });
 
       var server = sinon.fakeServer.create();
-      server.respondWith([200, { 'Content-Type': 'application/json' }, json]);
-      server.respondImmediately = true;
+      server.respondWith(
+        [200, {"Content-Type": "application/json"}, json]
+      );
 
       client.on('ready', function() {
         client.identify(user2, null, function() {
@@ -234,7 +287,9 @@ describe('LDClient', function() {
           expect(window.localStorage.getItem(lsKey2)).to.equal(json);
           done();
         });
+        server.respond();
       });
+      server.respond();
     });
 
     it('should not warn when tracking an known custom goal event', function(done) {
@@ -255,24 +310,20 @@ describe('LDClient', function() {
       });
     });
 
-    it('should throw when tracking a non-string custom goal event', function(done) {
-      var user = { key: 'user' };
+    it('should emit an error when tracking a non-string custom goal event', function(done) {
+      var user = {key: 'user'};
       var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: {}, // So the client doesn't request settings
       });
-
-      const track = function(key) {
-        return function() {
-          client.track(key);
-        };
-      };
-
+      var errorCount = 0;
       client.on('ready', function() {
-        expect(track(123)).to.throw(messages.invalidKey());
-        expect(track([])).to.throw(messages.invalidKey());
-        expect(track({})).to.throw(messages.invalidKey());
-        expect(track(null)).to.throw(messages.invalidKey());
-        expect(track(undefined)).to.throw(messages.invalidKey());
+        var errorSpy = sinon.spy(console, 'error');
+        var badCustomEventKeys = [123, [], {}, null, undefined]
+        badCustomEventKeys.forEach(function(key) {
+          client.track(key);
+          expect(errorSpy.calledWith(messages.unknownCustomEventKey(key))).to.be.true;
+        })
+        errorSpy.restore();
         done();
       });
     });

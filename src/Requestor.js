@@ -1,4 +1,6 @@
-import * as utils from './utils';
+var utils = require('./utils');
+var errors = require('./errors');
+var messages = require('./messages');
 
 var json = 'application/json';
 
@@ -14,19 +16,8 @@ function fetchJSON(endpoint, body, callback) {
   });
 
   xhr.addEventListener('error', function() {
-    if (xhr.status === 404) {
-      var error;
-      if (endpoint.includes('/sdk/eval/')) {
-        error = 'Error fetching flag settings';
-      } else if (endpoint.includes('/sdk/goals/')) {
-        error = 'Error fetching goals';
-      } else {
-        error = 'Error';
-      }
-      console.error(
-        error +
-          ': environment not found. Please see https://docs.launchdarkly.com/docs/js-sdk-reference#section-initializing-the-client for instructions on SDK initialization.'
-      );
+    if(xhr.status === 404) {
+      callback(new errors.LDInvalidEnvironmentIdError(messages.environmentNotFound()));
     }
     callback(xhr.statusText);
   });
@@ -43,10 +34,10 @@ function fetchJSON(endpoint, body, callback) {
   return xhr;
 }
 
-var flagSettingsRequest;
-var lastFlagSettingsCallback;
-
 function Requestor(baseUrl, environment, useReport) {
+  var flagSettingsRequest;
+  var lastFlagSettingsCallback;
+
   var requestor = {};
 
   requestor.fetchFlagSettings = function(user, hash, callback) {
