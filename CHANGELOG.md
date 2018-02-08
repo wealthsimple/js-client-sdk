@@ -1,7 +1,6 @@
 # Change log
 
-All notable changes to the LaunchDarkly client-side JavaScript SDK will be documented in this file. This
-project adheres to [Semantic Versioning](http://semver.org).
+All notable changes to the LaunchDarkly client-side JavaScript SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
 ## [1.4.0] - 2018-02-07
 
