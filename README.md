@@ -1,6 +1,6 @@
 # LaunchDarkly SDK for Client-Side JavaScript
 
-[![Circle CI](https://circleci.com/gh/launchdarkly/js-client/tree/master.svg?style=svg)](https://circleci.com/gh/launchdarkly/js-client/tree/master)
+[![Circle CI](https://circleci.com/gh/launchdarkly/js-client/tree/next.svg?style=svg)](https://circleci.com/gh/launchdarkly/js-client/tree/next)
 
 ## Introduction
 
