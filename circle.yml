@@ -1,0 +1,9 @@
+machine:
+  node:
+    version: 8.0.0
+
+test:
+  override:
+    - npm run format:test
+    - npm run lint:all
+    - npm test --all
