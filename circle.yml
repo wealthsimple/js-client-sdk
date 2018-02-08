@@ -2,6 +2,11 @@ machine:
   node:
     version: 8.0.0
 
+dependencies:
+  override:
+    - npm install --production=false
+    
+
 test:
   override:
     - npm run format:test
