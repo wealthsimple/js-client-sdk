@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "Base64": "1.0.1",
+    "babel-preset-env": "1.2.2",
     "escape-string-regexp": "1.0.5"
   },
   "repository": {
