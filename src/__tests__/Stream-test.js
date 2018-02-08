@@ -1,25 +1,25 @@
 import Stream from '../Stream';
 
-var noop = function() {};
+const noop = function() {};
 
-describe('Stream', function() {
-  it('should not throw on EventSource when it does not exist', function() {
+describe('Stream', () => {
+  it('should not throw on EventSource when it does not exist', () => {
     window.EventSource = undefined;
-    var stream = new Stream('https://example.com', 'test');
+    const stream = new Stream('https://example.com', 'test');
 
-    var connect = function() {
+    const connect = function() {
       stream.connect(noop);
     };
 
-    expect(connect).to.not.throw(TypeError);
+    expect(connect).not.toThrow(TypeError);
   });
-  it('should not throw when calling disconnect without first calling connect', function() {
-    var stream = new Stream('https://example.com', 'test');
+  it('should not throw when calling disconnect without first calling connect', () => {
+    const stream = new Stream('https://example.com', 'test');
 
-    var disconnect = function() {
+    const disconnect = function() {
       stream.disconnect(noop);
     };
 
-    expect(disconnect).to.not.throw(TypeError);
+    expect(disconnect).not.toThrow(TypeError);
   });
 });

@@ -1,13 +1,13 @@
-var utils = require('./utils');
-var errors = require('./errors');
-var messages = require('./messages');
+import * as utils from './utils';
+import * as errors from './errors';
+import * as messages from './messages';
 
-var json = 'application/json';
+const json = 'application/json';
 
 function fetchJSON(endpoint, body, callback) {
-  var xhr = new XMLHttpRequest();
+  const xhr = new XMLHttpRequest();
 
-  xhr.addEventListener('load', function() {
+  xhr.addEventListener('load', () => {
     if (xhr.status === 200 && xhr.getResponseHeader('Content-type') === json) {
       callback(null, JSON.parse(xhr.responseText));
     } else {
@@ -15,8 +15,8 @@ function fetchJSON(endpoint, body, callback) {
     }
   });
 
-  xhr.addEventListener('error', function() {
-    if(xhr.status === 404) {
+  xhr.addEventListener('error', () => {
+    if (xhr.status === 404) {
       callback(new errors.LDInvalidEnvironmentIdError(messages.environmentNotFound()));
     }
     callback(xhr.statusText);
@@ -34,17 +34,17 @@ function fetchJSON(endpoint, body, callback) {
   return xhr;
 }
 
-function Requestor(baseUrl, environment, useReport) {
-  var flagSettingsRequest;
-  var lastFlagSettingsCallback;
+export default function Requestor(baseUrl, environment, useReport) {
+  let flagSettingsRequest;
+  let lastFlagSettingsCallback;
 
-  var requestor = {};
+  const requestor = {};
 
   requestor.fetchFlagSettings = function(user, hash, callback) {
-    var data;
-    var endpoint;
-    var body;
-    var cb;
+    let data;
+    let endpoint;
+    let body;
+    let cb;
 
     if (useReport) {
       endpoint = [baseUrl, '/sdk/eval/', environment, '/user', hash ? '?h=' + hash : ''].join('');
@@ -54,14 +54,7 @@ function Requestor(baseUrl, environment, useReport) {
       endpoint = [baseUrl, '/sdk/eval/', environment, '/users/', data, hash ? '?h=' + hash : ''].join('');
     }
 
-    var wrappedCallback = (function(currentCallback) {
-      return function() {
-        currentCallback.apply(null, arguments);
-        flagSettingsRequest = null;
-        lastFlagSettingsCallback = null;
-      };
-    })(callback);
-    var wrappedCallback = (function(currentCallback) {
+    const wrappedCallback = (function(currentCallback) {
       return function() {
         currentCallback.apply(null, arguments);
         flagSettingsRequest = null;
@@ -69,12 +62,26 @@ function Requestor(baseUrl, environment, useReport) {
       };
     })(callback);
 
+    if (flagSettingsRequest) {
+      flagSettingsRequest.abort();
+      cb = (function(prevCallback) {
+        return function() {
+          prevCallback && prevCallback.apply(null, arguments);
+          wrappedCallback.apply(null, arguments);
+        };
+      })(lastFlagSettingsCallback);
+    } else {
+      cb = wrappedCallback;
+    }
+
     lastFlagSettingsCallback = cb;
     flagSettingsRequest = fetchJSON(endpoint, body, cb);
   };
+
   requestor.fetchGoals = function(callback) {
-    var endpoint = [baseUrl, '/sdk/goals/', environment].join('');
+    const endpoint = [baseUrl, '/sdk/goals/', environment].join('');
     fetchJSON(endpoint, null, callback);
   };
+
   return requestor;
 }

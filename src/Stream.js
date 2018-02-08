@@ -1,7 +1,7 @@
 export default function Stream(url, environment) {
-  var stream = {};
-  var eventSourceUrl = url + '/ping/' + environment;
-  var es = null;
+  const stream = {};
+  const eventSourceUrl = url + '/ping/' + environment;
+  let es = null;
 
   stream.connect = function(onPing) {
     if (typeof EventSource !== 'undefined') {
@@ -11,7 +11,9 @@ export default function Stream(url, environment) {
   };
 
   stream.disconnect = function() {
-    if (es) es.close();
+    if (es) {
+      es.close();
+    }
   };
 
   stream.isConnected = function() {

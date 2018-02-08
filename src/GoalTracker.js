@@ -1,9 +1,9 @@
 import escapeStringRegexp from 'escape-string-regexp';
 
 function doesUrlMatch(matcher, href, search, hash) {
-  var canonicalUrl = href.replace(search, '').replace(hash, '');
-  var regex;
-  var testUrl;
+  const canonicalUrl = href.replace(search, '').replace(hash, '');
+  let regex;
+  let testUrl;
 
   switch (matcher.kind) {
     case 'exact':
@@ -29,16 +29,18 @@ function doesUrlMatch(matcher, href, search, hash) {
 }
 
 function findGoalsForClick(event, clickGoals) {
-  var matches = [];
+  const matches = [];
 
-  for (var i = 0; i < clickGoals.length; i++) {
-    var target = event.target;
-    var goal = clickGoals[i];
-    var selector = goal.selector;
-    var elements = document.querySelectorAll(selector);
+  for (let i = 0; i < clickGoals.length; i++) {
+    let target = event.target;
+    const goal = clickGoals[i];
+    const selector = goal.selector;
+    const elements = document.querySelectorAll(selector);
     while (target && elements.length > 0) {
-      for (var j = 0; j < elements.length; j++) {
-        if (target === elements[j]) matches.push(goal);
+      for (let j = 0; j < elements.length; j++) {
+        if (target === elements[j]) {
+          matches.push(goal);
+        }
       }
       target = target.parentNode;
     }
@@ -48,16 +50,16 @@ function findGoalsForClick(event, clickGoals) {
 }
 
 export default function GoalTracker(goals, onEvent) {
-  var tracker = {};
-  var listenerFn = null;
+  const tracker = {};
+  let listenerFn = null;
 
-  var clickGoals = [];
+  const clickGoals = [];
 
-  for (var i = 0; i < goals.length; i++) {
-    var goal = goals[i];
-    var urls = goal.urls || [];
+  for (let i = 0; i < goals.length; i++) {
+    const goal = goals[i];
+    const urls = goal.urls || [];
 
-    for (var j = 0; j < urls.length; j++) {
+    for (let j = 0; j < urls.length; j++) {
       if (doesUrlMatch(urls[j], location.href, location.search, location.hash)) {
         if (goal.kind === 'pageview') {
           onEvent('pageview', goal);
@@ -72,8 +74,8 @@ export default function GoalTracker(goals, onEvent) {
 
   if (clickGoals.length > 0) {
     listenerFn = function(event) {
-      var goals = findGoalsForClick(event, clickGoals);
-      for (var i = 0; i < goals.length; i++) {
+      const goals = findGoalsForClick(event, clickGoals);
+      for (let i = 0; i < goals.length; i++) {
         onEvent('click', goals[i]);
       }
     };

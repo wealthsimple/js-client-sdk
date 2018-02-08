@@ -1,10 +1,10 @@
-function EventEmitter() {
-  var emitter = {};
-  var events = {};
+export default function EventEmitter() {
+  const emitter = {};
+  const events = {};
 
   const listeningTo = function(event) {
     return !!events[event];
-  }
+  };
 
   emitter.on = function(event, handler, context) {
     events[event] = events[event] || [];
@@ -18,7 +18,7 @@ function EventEmitter() {
     if (!events[event]) {
       return;
     }
-    for (var i = 0; i < events[event].length; i++) {
+    for (let i = 0; i < events[event].length; i++) {
       if (events[event][i].handler === handler && events[event][i].context === context) {
         events[event] = events[event].slice(0, i).concat(events[event].slice(i + 1));
       }
@@ -29,7 +29,7 @@ function EventEmitter() {
     if (!events[event]) {
       return;
     }
-    for (var i = 0; i < events[event].length; i++) {
+    for (let i = 0; i < events[event].length; i++) {
       events[event][i].handler.apply(events[event][i].context, Array.prototype.slice.call(arguments, 1));
     }
   };
@@ -43,8 +43,6 @@ function EventEmitter() {
     } else {
       console.error(error.message);
     }
-  }
+  };
   return emitter;
 }
-
-export default EventEmitter;

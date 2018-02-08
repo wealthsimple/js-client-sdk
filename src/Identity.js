@@ -1,7 +1,7 @@
 import * as utils from './utils';
 
 function sanitizeUser(u) {
-  var sane = utils.clone(u);
+  const sane = utils.clone(u);
   if (sane.key) {
     sane.key = sane.key.toString();
   }
@@ -9,8 +9,8 @@ function sanitizeUser(u) {
 }
 
 export default function Identity(initialUser, onChange) {
-  var ident = {};
-  var user;
+  const ident = {};
+  let user;
 
   ident.setUser = function(u) {
     user = sanitizeUser(u);

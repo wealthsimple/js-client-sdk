@@ -1,17 +1,17 @@
 import * as utils from './utils';
 
 export default function EventProcessor(eventsUrl, eventSerializer) {
-  var processor = {};
-  var queue = [];
-  var initialFlush = true;
+  const processor = {};
+  const queue = [];
+  let initialFlush = true;
 
   processor.enqueue = function(event) {
     queue.push(event);
   };
 
   processor.flush = function(user, sync) {
-    var maxLength = 2000 - eventsUrl.length;
-    var data = [];
+    let maxLength = 2000 - eventsUrl.length;
+    let data = [];
 
     if (!user) {
       if (initialFlush) {
@@ -28,7 +28,7 @@ export default function EventProcessor(eventsUrl, eventSerializer) {
 
     initialFlush = false;
     while (maxLength > 0 && queue.length > 0) {
-      var event = queue.pop();
+      const event = queue.pop();
       event.user = user;
       maxLength -= utils.base64URLEncode(JSON.stringify(event)).length;
       // If we are over the max size, put this one back on the queue
@@ -43,15 +43,15 @@ export default function EventProcessor(eventsUrl, eventSerializer) {
 
     if (data.length > 0) {
       data = eventSerializer.serialize_events(data);
-      var src = eventsUrl + '?d=' + utils.base64URLEncode(JSON.stringify(data));
+      const src = eventsUrl + '?d=' + utils.base64URLEncode(JSON.stringify(data));
       // Detect browser support for CORS
       if ('withCredentials' in new XMLHttpRequest()) {
         /* Supports cross-domain requests */
-        var xhr = new XMLHttpRequest();
+        const xhr = new XMLHttpRequest();
         xhr.open('GET', src, !sync);
         xhr.send();
       } else {
-        var img = new Image();
+        const img = new Image();
         img.src = src;
       }
     }
@@ -64,7 +64,7 @@ export default function EventProcessor(eventsUrl, eventSerializer) {
       if (sync) {
         processor.flush(user, sync);
       } else {
-        setTimeout(function() {
+        setTimeout(() => {
           processor.flush(user);
         }, 0);
       }

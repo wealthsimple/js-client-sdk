@@ -1,56 +1,71 @@
-var EventProcessor = require('./EventProcessor');
-var EventEmitter = require('./EventEmitter');
-var EventSerializer = require('./EventSerializer');
-var GoalTracker = require('./GoalTracker');
-var Stream = require('./Stream');
-var Requestor = require('./Requestor');
-var Identity = require('./Identity');
-var utils = require('./utils');
-var messages = require('./messages');
-var store = require('./store');
-var errors = require('./errors');
+import EventProcessor from './EventProcessor';
+import EventEmitter from './EventEmitter';
+import EventSerializer from './EventSerializer';
+import GoalTracker from './GoalTracker';
+import Stream from './Stream';
+import Requestor from './Requestor';
+import Identity from './Identity';
+import store from './store';
+import * as utils from './utils';
+import * as messages from './messages';
+import * as errors from './errors';
 
-function initialize(env, user, options) {  
-  var flags = {};
-  var environment;
-  var events;
-  var requestor;
-  var stream;
-  var sendEvents;
-  var emitter;
-  var hash;
-  var ident;
-  var baseUrl;
-  var eventsUrl;
-  var streamUrl;
-  var goalTracker;
-  var useLocalStorage;
-  var localStorageKey;
-  var goals;
+const readyEvent = 'ready';
+const changeEvent = 'change';
+const flushInterval = 2000;
 
-  var readyEvent = 'ready';
-  var changeEvent = 'change';
+function initialize(env, user, options = {}) {
+  const baseUrl = options.baseUrl || 'https://app.launchdarkly.com';
+  const eventsUrl = options.eventsUrl || 'https://events.launchdarkly.com';
+  const streamUrl = options.streamUrl || 'https://clientstream.launchdarkly.com';
+  const hash = options.hash;
+  const sendEvents = typeof options.sendEvents === 'undefined' ? true : config.sendEvents;
+  const environment = env;
+  const emitter = EventEmitter();
+  const stream = Stream(streamUrl, environment);
+  const events = EventProcessor(eventsUrl + '/a/' + environment + '.gif', EventSerializer(options));
+  const requestor = Requestor(baseUrl, environment, options.useReport);
+  const seenRequests = {};
+  let flags = typeof options.bootstrap === 'object' ? options.bootstrap : {};
+  let goalTracker;
+  let useLocalStorage;
+  let goals;
 
-  var flushInterval = 2000;
+  function lsKey(env, user) {
+    let key = '';
 
-  var seenRequests = {};
+    if (user) {
+      key = hash || utils.btoa(JSON.stringify(user));
+    }
+
+    return 'ld:' + env + ':' + key;
+  }
+
+  function enqueueEvent(event) {
+    if (sendEvents && !doNotTrack()) {
+      events.enqueue(event);
+    }
+  }
 
   function sendIdentifyEvent(user) {
     enqueueEvent({
       kind: 'identify',
       key: user.key,
       user: user,
-      creationDate: (new Date()).getTime()
+      creationDate: new Date().getTime(),
     });
   }
 
-  function sendFlagEvent(key, value, defaultValue) {
-    var user = ident.getUser();
-    var cacheKey = JSON.stringify(value) + (user && user.key ? user.key : '') + key;
-    var now = new Date();
-    var cached = seenRequests[cacheKey];
+  const ident = Identity(user, sendIdentifyEvent);
+  let localStorageKey = lsKey(environment, ident.getUser());
 
-    if (cached && (now - cached) < 300000 /* five minutes, in ms */) {
+  function sendFlagEvent(key, value, defaultValue) {
+    const user = ident.getUser();
+    const cacheKey = JSON.stringify(value) + (user && user.key ? user.key : '') + key;
+    const now = new Date();
+    const cached = seenRequests[cacheKey];
+
+    if (cached && now - cached < 300000 /* five minutes, in ms */) {
       return;
     }
 
@@ -61,18 +76,18 @@ function initialize(env, user, options) {
       key: key,
       user: user,
       value: value,
-      'default': defaultValue,
-      creationDate: now.getTime()
+      default: defaultValue,
+      creationDate: now.getTime(),
     });
   }
 
   function sendGoalEvent(kind, goal) {
-    var event = {
+    const event = {
       kind: kind,
       key: goal.key,
       data: null,
       url: window.location.href,
-      creationDate: (new Date()).getTime()
+      creationDate: new Date().getTime(),
     };
 
     if (kind === 'click') {
@@ -83,23 +98,26 @@ function initialize(env, user, options) {
   }
 
   function identify(user, hash, onDone) {
-    return utils.wrapPromiseCallback(new Promise((function(resolve, reject) {
-      ident.setUser(user);
-      requestor.fetchFlagSettings(ident.getUser(), hash, function(err, settings) {
-        if (err) {
-          emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
-          return reject(err)
-        }
-        if (settings) {
-          updateSettings(settings);
-        }
-        resolve(settings);
-      });
-    }).bind(this)), onDone);
+    return utils.wrapPromiseCallback(
+      new Promise((resolve, reject) => {
+        ident.setUser(user);
+        requestor.fetchFlagSettings(ident.getUser(), hash, (err, settings) => {
+          if (err) {
+            emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
+            return reject(err);
+          }
+          if (settings) {
+            updateSettings(settings);
+          }
+          resolve(settings);
+        });
+      }),
+      onDone
+    );
   }
 
   function variation(key, defaultValue) {
-    var value;
+    let value;
 
     if (flags && flags.hasOwnProperty(key)) {
       value = flags[key] === null ? defaultValue : flags[key];
@@ -112,30 +130,26 @@ function initialize(env, user, options) {
     return value;
   }
 
-  function enqueueEvent(event) {
-    if (sendEvents && !doNotTrack()) {
-      events.enqueue(event);
-    }
-  }
-
   function doNotTrack() {
-    var flag;
+    let flag;
     if (navigator && navigator.doNotTrack !== undefined) {
-      flag = navigator.doNotTrack;    // FF, Chrome
+      flag = navigator.doNotTrack; // FF, Chrome
     } else if (navigator && navigator.msDoNotTrack !== undefined) {
-      flag = navigator.msDoNotTrack;  // IE 9/10
+      flag = navigator.msDoNotTrack; // IE 9/10
     } else {
-      flag = window.doNotTrack;       // IE 11+, Safari
+      flag = window.doNotTrack; // IE 11+, Safari
     }
     return flag === '1' || flag === 'yes';
   }
 
   function allFlags() {
-    var results = {};
+    const results = {};
 
-    if (!flags) { return results; }
+    if (!flags) {
+      return results;
+    }
 
-    for (var key in flags) {
+    for (const key in flags) {
       if (flags.hasOwnProperty(key)) {
         results[key] = variation(key, null);
       }
@@ -145,9 +159,11 @@ function initialize(env, user, options) {
   }
 
   function customEventExists(key) {
-    if (!goals || goals.length === 0) { return false; }
+    if (!goals || goals.length === 0) {
+      return false;
+    }
 
-    for (var i=0 ; i < goals.length ; i++) {
+    for (let i = 0; i < goals.length; i++) {
       if (goals[i].kind === 'custom' && goals[i].key === key) {
         return true;
       }
@@ -172,13 +188,13 @@ function initialize(env, user, options) {
       key: key,
       data: data,
       url: window.location.href,
-      creationDate: (new Date()).getTime()
+      creationDate: new Date().getTime(),
     });
   }
 
   function connectStream() {
-    stream.connect(function() {
-      requestor.fetchFlagSettings(ident.getUser(), hash, function(err, settings) {
+    stream.connect(() => {
+      requestor.fetchFlagSettings(ident.getUser(), hash, (err, settings) => {
         if (err) {
           emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
         }
@@ -188,13 +204,12 @@ function initialize(env, user, options) {
   }
 
   function updateSettings(settings) {
-    var changes;
-    var keys;
+    if (!settings) {
+      return;
+    }
 
-    if (!settings) { return; }
-
-    changes = utils.modifications(flags, settings);
-    keys = Object.keys(changes);
+    const changes = utils.modifications(flags, settings);
+    const keys = Object.keys(changes);
 
     flags = settings;
 
@@ -205,13 +220,13 @@ function initialize(env, user, options) {
     }
 
     if (keys.length > 0) {
-      keys.forEach(function(key) {
+      keys.forEach(key => {
         emitter.emit(changeEvent + ':' + key, changes[key].current, changes[key].previous);
       });
 
       emitter.emit(changeEvent, changes);
 
-      keys.forEach(function(key) {
+      keys.forEach(key => {
         sendFlagEvent(key, changes[key].current);
       });
     }
@@ -233,62 +248,45 @@ function initialize(env, user, options) {
   }
 
   function handleMessage(event) {
-    if (event.origin !== baseUrl) { return; }
+    if (event.origin !== baseUrl) {
+      return;
+    }
     if (event.data.type === 'SYN') {
       window.editorClientBaseUrl = baseUrl;
-      var editorTag = document.createElement('script');
+      const editorTag = document.createElement('script');
       editorTag.type = 'text/javascript';
       editorTag.async = true;
       editorTag.src = baseUrl + event.data.editorClientUrl;
-      var s = document.getElementsByTagName('script')[0];
+      const s = document.getElementsByTagName('script')[0];
       s.parentNode.insertBefore(editorTag, s);
     }
   }
 
-  function lsKey(env, user) {
-    var key = '';
-    if (user) {
-      key = hash || utils.btoa(JSON.stringify(user));
-    }
-    return 'ld:' + env + ':' + key;
-  }
-
-  options = options || {};
-  environment = env;
-  flags = typeof options.bootstrap === 'object' ? options.bootstrap : {};
-  hash = options.hash;
-  baseUrl = options.baseUrl || 'https://app.launchdarkly.com';
-  eventsUrl = options.eventsUrl || 'https://events.launchdarkly.com';
-  streamUrl = options.streamUrl || 'https://clientstream.launchdarkly.com';
-  stream = Stream(streamUrl, environment);
-  events = EventProcessor(eventsUrl + '/a/' + environment + '.gif', EventSerializer(options));
-  sendEvents = typeof options.sendEvents === 'undefined' ? true : config.sendEvents;
-  emitter = EventEmitter();
-  ident = Identity(user, sendIdentifyEvent);
-  requestor = Requestor(baseUrl, environment, options.useReport);
-  localStorageKey = lsKey(environment, ident.getUser());
-
   if (!env) {
-    utils.onNextTick(function() {
+    utils.onNextTick(() => {
       emitter.maybeReportError(new errors.LDInvalidEnvironmentIdError(messages.environmentNotSpecified()));
-    })
+    });
   }
 
   if (!user) {
-    utils.onNextTick(function() {
+    utils.onNextTick(() => {
       emitter.maybeReportError(new errors.LDInvalidUserError(messages.userNotSpecified()));
     });
-  }
-  else if (!user.key) {
-    utils.onNextTick(function() {
+  } else if (!user.key) {
+    utils.onNextTick(() => {
       emitter.maybeReportError(new errors.LDInvalidUserError(messages.invalidUser()));
     });
   }
 
   if (typeof options.bootstrap === 'object') {
-    utils.onNextTick(function() { emitter.emit(readyEvent); });
-  }
-  else if (typeof(options.bootstrap) === 'string' && options.bootstrap.toUpperCase() === 'LOCALSTORAGE' && typeof(Storage) !== 'undefined') {
+    utils.onNextTick(() => {
+      emitter.emit(readyEvent);
+    });
+  } else if (
+    typeof options.bootstrap === 'string' &&
+    options.bootstrap.toUpperCase() === 'LOCALSTORAGE' &&
+    !!localStorage
+  ) {
     useLocalStorage = true;
 
     // check if localStorage data is corrupted, if so clear it
@@ -299,7 +297,7 @@ function initialize(env, user, options) {
     }
 
     if (flags === null) {
-      requestor.fetchFlagSettings(ident.getUser(), hash, function(err, settings) {
+      requestor.fetchFlagSettings(ident.getUser(), hash, (err, settings) => {
         if (err) {
           emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
         }
@@ -311,16 +309,19 @@ function initialize(env, user, options) {
       // We're reading the flags from local storage. Signal that we're ready,
       // then update localStorage for the next page load. We won't signal changes or update
       // the in-memory flags unless you subscribe for changes
-      utils.onNextTick(function() { emitter.emit(readyEvent); });
-      requestor.fetchFlagSettings(ident.getUser(), hash, function(err, settings) {
+      utils.onNextTick(() => {
+        emitter.emit(readyEvent);
+      });
+
+      requestor.fetchFlagSettings(ident.getUser(), hash, (err, settings) => {
         if (err) {
           emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
         }
         settings && store.set(localStorageKey, JSON.stringify(settings));
       });
     }
-
-    requestor.fetchGoals(function(err, g) {
+  } else {
+    requestor.fetchFlagSettings(ident.getUser(), hash, (err, settings) => {
       if (err) {
         emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
       }
@@ -329,9 +330,11 @@ function initialize(env, user, options) {
     });
   }
 
-  requestor.fetchGoals(function(err, g) {
+  requestor.fetchGoals((err, g) => {
     if (err) {
-      emitter.maybeReportError(new errors.LDUnexpectedResponseError('Error fetching goals: ' + err.message ? err.message : err));
+      emitter.maybeReportError(
+        new errors.LDUnexpectedResponseError('Error fetching goals: ' + err.message ? err.message : err)
+      );
     }
     if (g && g.length > 0) {
       goals = g;
@@ -354,7 +357,7 @@ function initialize(env, user, options) {
     start();
   }
 
-  window.addEventListener('beforeunload', function() {
+  window.addEventListener('beforeunload', () => {
     events.flush(ident.getUser(), true);
   });
 
@@ -377,27 +380,26 @@ function initialize(env, user, options) {
 
   window.addEventListener('message', handleMessage);
 
-  var readyPromise = new Promise(function(resolve) {
-    var onReady = emitter.on(readyEvent, function() {
+  const readyPromise = new Promise(resolve => {
+    const onReady = emitter.on(readyEvent, () => {
       emitter.off(readyEvent, onReady);
       resolve();
     });
   });
 
-  var client = {
-    waitUntilReady: function() {
-      return readyPromise;
-    },
+  const client = {
+    waitUntilReady: () => readyPromise,
     identify: identify,
     variation: variation,
     track: track,
     on: on,
     off: off,
-    allFlags: allFlags
+    allFlags: allFlags,
   };
 
   return client;
 }
 
 export const version = VERSION;
+
 export { initialize };

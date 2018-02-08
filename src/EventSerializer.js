@@ -1,5 +1,3 @@
-import * as utils from '../utils';
-
 /**
  * The EventSerializer object transforms the internal representation of events into objects suitable to be sent
  * as JSON to the server. This includes hiding any private user attributes.
@@ -7,11 +5,11 @@ import * as utils from '../utils';
  * @param {Object} the LaunchDarkly client configuration object
  **/
 function EventSerializer(config) {
-  var serializer = {};
-  var allAttributesPrivate = config.all_attributes_private;
-  var privateAttributeNames = config.private_attribute_names || [];
-  var ignoreAttrs = { key: true, custom: true, anonymous: true };
-  var allowedTopLevelAttrs = {
+  const serializer = {};
+  const allAttributesPrivate = config.all_attributes_private;
+  const privateAttributeNames = config.private_attribute_names || [];
+  const ignoreAttrs = { key: true, custom: true, anonymous: true };
+  const allowedTopLevelAttrs = {
     key: true,
     secondary: true,
     ip: true,
@@ -25,66 +23,63 @@ function EventSerializer(config) {
     custom: true,
   };
 
-  serializer.serialize_events = function(events) {
-    return events.map(serialize_event);
-  };
-
-  function serialize_event(event) {
+  function serializeEvent(event) {
     return Object.keys(event)
-      .map(function(key) {
-        return [key, key === 'user' ? filter_user(event[key]) : event[key]];
-      })
-      .reduce(function(acc, p) {
-        acc[p[0]] = p[1];
-        return acc;
-      }, {});
+      .map(key => [key, key === 'user' ? filterUser(event[key]) : event[key]])
+      .reduce(
+        (acc, p) => ({
+          ...acc,
+          [p[0]]: p[1],
+        }),
+        {}
+      );
   }
 
-  function filter_user(user) {
-    var allPrivateAttrs = {};
-    var userPrivateAttrs = user.privateAttributeNames || [];
+  function filterUser(user) {
+    const userPrivateAttrs = user.privateAttributeNames || [];
 
-    var isPrivateAttr = function(name) {
-      return (
-        !ignoreAttrs[name] &&
-        (allAttributesPrivate || userPrivateAttrs.indexOf(name) !== -1 || privateAttributeNames.indexOf(name) !== -1)
-      );
-    };
-    var filterAttrs = function(props, isAttributeAllowed) {
-      return Object.keys(props).reduce(
-        function(acc, name) {
+    const isPrivateAttr = name =>
+      !ignoreAttrs[name] &&
+      (allAttributesPrivate || userPrivateAttrs.indexOf(name) !== -1 || privateAttributeNames.indexOf(name) !== -1);
+
+    const filterAttrs = (props, isAttributeAllowed) =>
+      Object.keys(props).reduce(
+        (acc, name) => {
+          const nextAcc = [...acc];
+
           if (isAttributeAllowed(name)) {
             if (isPrivateAttr(name)) {
               // add to hidden list
-              acc[1][name] = true;
+              nextAcc[1][name] = true;
             } else {
-              acc[0][name] = props[name];
+              nextAcc[0][name] = props[name];
             }
           }
           return acc;
         },
         [{}, {}]
       );
-    };
-    var result = filterAttrs(user, function(key) {
-      return allowedTopLevelAttrs[key];
-    });
-    var filteredProps = result[0];
-    var removedAttrs = result[1];
+
+    const result = filterAttrs(user, key => allowedTopLevelAttrs[key]);
+    const filteredProps = result[0];
+    const removedAttrs = result[1];
+
     if (user.custom) {
-      var customResult = filterAttrs(user.custom, function(key) {
-        return true;
-      });
+      const customResult = filterAttrs(user.custom, () => true);
       filteredProps.custom = customResult[0];
-      utils.merge(removedAttrs, customResult[1]);
+      Object.assign(removedAttrs, customResult[1]);
     }
-    var removedAttrNames = Object.keys(removedAttrs);
+
+    const removedAttrNames = Object.keys(removedAttrs);
+
     if (removedAttrNames.length) {
       removedAttrNames.sort();
       filteredProps.privateAttrs = removedAttrNames;
     }
     return filteredProps;
   }
+
+  serializer.serialize_events = events => events.map(serializeEvent);
 
   return serializer;
 }

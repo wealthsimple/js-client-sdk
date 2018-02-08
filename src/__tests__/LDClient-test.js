@@ -1,367 +1,297 @@
+import sinon from 'sinon';
 import semverCompare from 'semver-compare';
 
-var LDClient = require('../index');
-var messages = require('../messages');
-var errors = require('../errors');
-var base64Encode = require('../utils').btoa;
+import * as LDClient from '../index';
+import * as messages from '../messages';
+import { btoa } from '../utils';
 
-describe('LDClient', function() {
-  var xhr;
-  var requests = [];
-  var sandbox;
-  var store = {};
-  var lsKey = 'ld:UNKNOWN_ENVIRONMENT_ID:' + btoa('{"key":"user"}');
+describe('LDClient', () => {
+  let xhr;
+  let requests = [];
+  let consoleErrorSpy;
+  let consoleWarnSpy;
 
-  beforeEach(function() {
+  const lsKey = 'ld:UNKNOWN_ENVIRONMENT_ID:' + btoa('{"key":"user"}');
+
+  beforeEach(() => {
     xhr = sinon.useFakeXMLHttpRequest();
-    xhr.onCreate = function(req) {
+    xhr.onCreate = req => {
       requests.push(req);
     };
 
-    sandbox = sinon.sandbox.create();
-    sandbox.stub(window.localStorage.__proto__, 'setItem', function(k, v) {
-      store[k] = v;
-    });
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    sandbox.stub(window.localStorage.__proto__, 'getItem', function(k) {
-      return store[k];
-    });
+    localStorage.clear();
   });
 
-  afterEach(function() {
+  afterEach(() => {
     requests = [];
     xhr.restore();
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
 
-    sandbox.restore();
+    localStorage.clear();
   });
 
-  it('should exist', function() {
-    expect(LDClient).to.exist;
-  });
-
-  describe('initialization', function() {
-    it('should trigger the ready event', function(done) {
-      var user = {key: 'user'};
-      var handleReady = sinon.spy();
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-        bootstrap: {}
+  describe('initialization', () => {
+    it('should trigger the ready event', done => {
+      const user = { key: 'user' };
+      const handleReady = jest.fn();
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+        bootstrap: {},
       });
 
       client.on('ready', handleReady);
 
-      setTimeout(function() {
-        expect(handleReady.called).to.be.true;
+      setTimeout(() => {
+        expect(handleReady).toHaveBeenCalled();
         done();
       }, 0);
     });
 
-    describe('waitUntilReady', function() {
-      it('should resolve waitUntilReady promise when ready', function(done) {
-        var user = {key: 'user'};
-        var handleReady = sinon.spy();
-        var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-          bootstrap: {}
+    describe('waitUntilReady', () => {
+      it('should resolve waitUntilReady promise when ready', done => {
+        const user = { key: 'user' };
+        const handleReady = jest.fn();
+        const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+          bootstrap: {},
         });
 
         client.waitUntilReady().then(handleReady);
-  
-        client.on('ready', function() {
-          setTimeout(function() {
-            expect(handleReady.called).to.be.true;
+
+        client.on('ready', () => {
+          setTimeout(() => {
+            expect(handleReady).toHaveBeenCalled();
             done();
           }, 0);
         });
       });
-  
-      it('should resolve waitUntilReady promise after ready event was already emitted', function(done) {
-        var user = { key: 'user' };
-        var handleInitialReady = sinon.spy();
-        var handleReady = sinon.spy();
-        var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-          bootstrap: {}
+
+      it('should resolve waitUntilReady promise after ready event was already emitted', done => {
+        const user = { key: 'user' };
+        const handleInitialReady = jest.fn();
+        const handleReady = jest.fn();
+        const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+          bootstrap: {},
         });
-  
+
         client.on('ready', handleInitialReady);
-  
-        setTimeout(function () {
+
+        setTimeout(() => {
           client.waitUntilReady().then(handleReady);
-  
-          setTimeout(function () {
-            expect(handleInitialReady.called).to.be.true;
-            expect(handleReady.called).to.be.true;
+
+          setTimeout(() => {
+            expect(handleInitialReady).toHaveBeenCalled();
+            expect(handleReady).toHaveBeenCalled();
             done();
           }, 0);
         }, 0);
       });
     });
 
-    it('should emit an error when initialize is called without an environment key', function(done) {
-      var user = {key: 'user'};
-      var client = LDClient.initialize('', user,  {
-        bootstrap: {}
-      });
-      client.on('error', function(err) {
-        expect(err.message).to.be.equal(messages.environmentNotSpecified());
-        done();
-      });
-    });
-
-    it('should emit an error when an invalid environment key is specified', function() {
-      var user = {key: 'user'};
-
-      var server = sinon.fakeServer.create();
-      server.respondWith(function(req) {
-        req.respond(404);
-      });
-      var client = LDClient.initialize('abc', user);
-      server.respond();
-      client.on('error', function(err) {
-        expect(err.message).to.be.equal(messages.environmentNotFound());
-        done();
-      });
-    })
-
-    it('should not fetch flag settings since bootstrap is provided', function() {
-      var user = {key: 'user'};
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+    it('should emit an error when initialize is called without an environment key', done => {
+      const user = { key: 'user' };
+      const client = LDClient.initialize('', user, {
         bootstrap: {},
       });
-
-      client.on('ready', handleReady);
-
-      setTimeout(function() {
-        expect(handleReady.called).to.be.true;
+      client.on('error', err => {
+        expect(err.message).toEqual(messages.environmentNotSpecified());
         done();
-      }, 0);
+      });
     });
 
-    it('should not fetch flag settings since bootstrap is provided', function() {
-      var user = { key: 'user' };
+    it('should emit an error when an invalid environment key is specified', () => {
+      const user = { key: 'user' };
+
+      const server = sinon.fakeServer.create();
+      server.respondWith(req => {
+        req.respond(404);
+      });
+      const client = LDClient.initialize('abc', user);
+      server.respond();
+      client.on('error', err => {
+        expect(err.message).toEqual(messages.environmentNotFound());
+        done();
+      });
+    });
+
+    it('should not fetch flag settings since bootstrap is provided', () => {
+      const user = { key: 'user' };
+
       LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: {},
       });
 
-      var settingsRequest = requests[0];
-      expect(/sdk\/eval/.test(settingsRequest.url)).to.be.false;
+      const settingsRequest = requests[0];
+      expect(/sdk\/eval/.test(settingsRequest.url)).toEqual(false);
     });
 
-    it('should contain package version', function() {
-      // Arrange
-      var version = LDClient.version;
-
-      // Act: all client bundles above 1.0.7 should contain package version
+    it('should contain package version', () => {
+      const version = LDClient.version;
+      // All client bundles above 1.0.7 should contain package version
       // https://github.com/substack/semver-compare
-      var result = semverCompare(version, '1.0.6');
-
-      // Assert
-      expect(result).to.equal(1);
+      const result = semverCompare(version, '1.0.6');
+      expect(result).toEqual(1);
     });
 
-    it('should clear cached settings if they are invalid JSON', function(done) {
-      var user = { key: 'user' };
-      var client;
+    it('should clear cached settings if they are invalid JSON', done => {
+      const user = { key: 'user' };
 
-      window.localStorage.setItem(lsKey, 'foo{bar}');
+      localStorage.setItem(lsKey, 'foo{bar}');
 
-      client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: 'localstorage',
       });
 
-      client.on('ready', function() {
-        expect(window.localStorage.getItem(lsKey)).to.be.null;
+      client.on('ready', () => {
+        expect(localStorage.getItem(lsKey)).toBeNull();
         done();
       });
     });
 
-    it('should handle localStorage getItem throwing an exception', function(done) {
-      sandbox.restore(window.localStorage.__proto__, 'getItem');
-      sandbox.stub(window.localStorage.__proto__, 'getItem').throws();
+    it('should not clear cached settings if they are valid JSON', done => {
+      const json = '{"enable-thing": true}';
+      const user = { key: 'user' };
 
-      var warnSpy = sandbox.spy(console, 'warn');
+      localStorage.setItem(lsKey, json);
 
-      var user = { key: 'user' };
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: 'localstorage',
       });
 
-      client.on('ready', function() {
-        expect(warnSpy.calledWith(messages.localStorageUnavailable())).to.be.true;
-        done();
-      });
-
-      requests[0].respond(200, { 'Content-Type': 'application/json' }, '[{"key": "known", "kind": "custom"}]');
-    });
-
-    it('should handle localStorage setItem throwing an exception', function(done) {
-      sandbox.restore(window.localStorage.__proto__, 'setItem');
-      sandbox.stub(window.localStorage.__proto__, 'setItem').throws();
-
-      var user = { key: 'user' };
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-        bootstrap: 'localstorage',
-      });
-
-      var warnSpy = sandbox.spy(console, 'warn');
-
-      requests[0].respond(200, { 'Content-Type': 'application/json' }, '[{"key": "known", "kind": "custom"}]');
-
-      client.on('ready', function() {
-        expect(warnSpy.calledWith(messages.localStorageUnavailable())).to.be.true;
+      client.on('ready', () => {
+        expect(localStorage.getItem(lsKey)).toEqual(json);
         done();
       });
     });
 
-    it('should not update cached settings if there was an error fetching flags', function(done) {
-      var user = { key: 'user' };
-      var json = '{"enable-foo": true}';
+    it('should not update cached settings if there was an error fetching flags', done => {
+      const user = { key: 'user' };
+      const json = '{"enable-foo": true}';
 
-      window.localStorage.setItem(lsKey, json);
+      localStorage.setItem(lsKey, json);
 
-      var server = sinon.fakeServer.create();
-      server.respondWith(function(req) {
+      const server = sinon.fakeServer.create();
+      server.respondWith(req => {
         req.respond(503);
       });
-      client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: 'localstorage',
       });
 
-      client.on('ready', function() {
-        expect(window.localStorage.getItem(lsKey)).to.equal(json);
-        done();
-      });
-    });
-
-    it('should not clear cached settings if they are valid JSON', function(done) {
-      var json = '{"enable-thing": true}';
-      var user = { key: 'user' };
-      var client;
-
-      window.localStorage.setItem(lsKey, json);
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-        bootstrap: 'localstorage',
-      });
-
-      client.on('ready', function() {
+      client.on('ready', () => {
         server.respond();
-        setTimeout(function() {
-          expect(window.localStorage.getItem(lsKey)).to.equal(json);
+        setTimeout(() => {
+          expect(localStorage.getItem(lsKey)).toEqual(json);
           done();
-        }, 1);
+        }, 0);
       });
     });
 
-    it('should use hash as localStorage key when secure mode is enabled', function(done) {
-      var user = { key: 'user' };
-      var lsKeyHash = 'ld:UNKNOWN_ENVIRONMENT_ID:totallyLegitHash';
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+    it('should use hash as localStorage key when secure mode is enabled', done => {
+      const user = { key: 'user' };
+      const lsKeyHash = 'ld:UNKNOWN_ENVIRONMENT_ID:totallyLegitHash';
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: 'localstorage',
         hash: 'totallyLegitHash',
       });
 
-      requests[0].respond(200, { 'Content-Type': 'application/json' }, '{"enable-foo": true}');
-
-      client.on('ready', function() {
-        expect(window.localStorage.getItem(lsKeyHash)).to.be.equal('{"enable-foo":true}');
+      client.on('ready', () => {
+        expect(localStorage.getItem(lsKeyHash)).toEqual('{"enable-foo":true}');
         done();
       });
+
+      requests[0].respond(200, { 'Content-Type': 'application/json' }, '{"enable-foo": true}');
     });
 
-    it('should clear localStorage when user context is changed', function(done) {
-      var json = '{"enable-foo":true}';
-      var lsKey2 = 'ld:UNKNOWN_ENVIRONMENT_ID:' + btoa('{"key":"user2"}');
+    it('should clear localStorage when user context is changed', done => {
+      const json = '{"enable-foo":true}';
+      const lsKey2 = 'ld:UNKNOWN_ENVIRONMENT_ID:' + btoa('{"key":"user2"}');
 
-      var user = { key: 'user' };
-      var user2 = { key: 'user2' };
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+      const user = { key: 'user' };
+      const user2 = { key: 'user2' };
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
         bootstrap: 'localstorage',
       });
 
-      var server = sinon.fakeServer.create();
-      server.respondWith(
-        [200, {"Content-Type": "application/json"}, json]
-      );
-
-      client.on('ready', function() {
-        client.identify(user2, null, function() {
-          expect(window.localStorage.getItem(lsKey)).to.be.null;
-          expect(window.localStorage.getItem(lsKey2)).to.equal(json);
+      client.on('ready', () => {
+        client.identify(user2, null, () => {
+          expect(localStorage.getItem(lsKey)).toBeNull();
+          expect(localStorage.getItem(lsKey2)).toEqual(json);
           done();
         });
-        server.respond();
       });
-      server.respond();
+
+      // This is a little hacky, but there will be three requests: fetch flags, fetch goals, re-fetch flags
+      requests[0].respond(200, { 'Content-Type': 'application/json' }, json);
+      requests[1].respond(200, { 'Content-Type': 'application/json' }, json);
+      requests[2].respond(200, { 'Content-Type': 'application/json' }, json);
     });
 
-    it('should not warn when tracking an known custom goal event', function(done) {
-      var user = { key: 'user' };
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-        bootstrap: {}, // So the client doesn't request settings
+    it('should not warn when tracking a known custom goal event', done => {
+      const user = { key: 'user' };
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+        bootstrap: {}, // so the client doesn't request settings
       });
 
-      var warnSpy = sinon.spy(console, 'warn');
-
-      requests[0].respond(200, { 'Content-Type': 'application/json' }, '[{"key": "known", "kind": "custom"}]');
-
-      client.on('ready', function() {
+      client.on('ready', () => {
         client.track('known');
-        expect(warnSpy.calledWith('Custom event key does not exist')).to.be.false;
-        warnSpy.restore();
+        expect(consoleWarnSpy).not.toHaveBeenCalledWith('Custom event key does not exist');
         done();
       });
-    });
-
-    it('should emit an error when tracking a non-string custom goal event', function(done) {
-      var user = {key: 'user'};
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-        bootstrap: {}, // So the client doesn't request settings
-      });
-      var errorCount = 0;
-      client.on('ready', function() {
-        var errorSpy = sinon.spy(console, 'error');
-        var badCustomEventKeys = [123, [], {}, null, undefined]
-        badCustomEventKeys.forEach(function(key) {
-          client.track(key);
-          expect(errorSpy.calledWith(messages.unknownCustomEventKey(key))).to.be.true;
-        })
-        errorSpy.restore();
-        done();
-      });
-    });
-
-    it('should warn when tracking an unknown custom goal event', function(done) {
-      var user = { key: 'user' };
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
-        bootstrap: {}, // So the client doesn't request settings
-      });
-
-      var warnSpy = sinon.spy(console, 'warn');
 
       requests[0].respond(200, { 'Content-Type': 'application/json' }, '[{"key": "known", "kind": "custom"}]');
+    });
 
-      client.on('ready', function() {
-        client.track('unknown');
-        expect(warnSpy.calledWith(messages.unknownCustomEventKey('unknown'))).to.be.true;
-        warnSpy.restore();
+    it('should emit an error when tracking a non-string custom goal event', done => {
+      const user = { key: 'user' };
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+        bootstrap: {}, // so the client doesn't request settings
+      });
+
+      client.on('ready', () => {
+        const badCustomEventKeys = [123, [], {}, null, undefined];
+        badCustomEventKeys.forEach(key => {
+          client.track(key);
+          expect(consoleErrorSpy).toHaveBeenCalledWith(messages.unknownCustomEventKey(key));
+        });
         done();
       });
     });
 
-    it('should emit an error event if there was an error fetching flags', function(done) {
-      var user = { key: 'user' };
+    it('should warn when tracking an unknown custom goal event', done => {
+      const user = { key: 'user' };
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+        bootstrap: {}, // so the client doesn't request settings
+      });
 
-      var server = sinon.fakeServer.create();
-      server.respondWith(function(req) {
+      client.on('ready', () => {
+        client.track('unknown');
+        expect(consoleWarnSpy).toHaveBeenCalledWith(messages.unknownCustomEventKey('unknown'));
+        done();
+      });
+
+      requests[0].respond(200, { 'Content-Type': 'application/json' }, '[{"key": "known", "kind": "custom"}]');
+    });
+
+    it('should emit an error event if there was an error fetching flags', done => {
+      const user = { key: 'user' };
+
+      const server = sinon.fakeServer.create();
+      server.respondWith(req => {
         req.respond(503);
       });
 
-      var client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user);
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user);
 
-      var handleError = sinon.spy();
+      const handleError = jest.fn();
       client.on('error', handleError);
       server.respond();
 
-      setTimeout(function() {
-        expect(handleError.called).to.be.true;
+      setTimeout(() => {
+        expect(handleError).toHaveBeenCalled();
         done();
       }, 0);
     });
