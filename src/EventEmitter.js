@@ -2,9 +2,7 @@ export default function EventEmitter() {
   const emitter = {};
   const events = {};
 
-  const listeningTo = function(event) {
-    return !!events[event];
-  };
+  const listeningTo = event => !!events[event];
 
   emitter.on = function(event, handler, context) {
     events[event] = events[event] || [];

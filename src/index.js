@@ -26,6 +26,7 @@ function initialize(env, user, options = {}) {
   const events = EventProcessor(eventsUrl + '/a/' + environment + '.gif', EventSerializer(options));
   const requestor = Requestor(baseUrl, environment, options.useReport);
   const seenRequests = {};
+  let samplingInterval = parseInt(options.samplingInterval, 10) || 0;
   let flags = typeof options.bootstrap === 'object' ? options.bootstrap : {};
   let goalTracker;
   let useLocalStorage;
@@ -33,16 +34,20 @@ function initialize(env, user, options = {}) {
 
   function lsKey(env, user) {
     let key = '';
-
     if (user) {
       key = hash || utils.btoa(JSON.stringify(user));
     }
-
     return 'ld:' + env + ':' + key;
   }
 
+  function shouldEnqueueEvent() {
+    return (
+      sendEvents && !doNotTrack() && (samplingInterval === 0 || Math.floor(Math.random() * samplingInterval) === 0)
+    );
+  }
+
   function enqueueEvent(event) {
-    if (sendEvents && !doNotTrack()) {
+    if (shouldEnqueueEvent()) {
       events.enqueue(event);
     }
   }
@@ -260,6 +265,17 @@ function initialize(env, user, options = {}) {
       const s = document.getElementsByTagName('script')[0];
       s.parentNode.insertBefore(editorTag, s);
     }
+  }
+
+  if (options.samplingInterval !== undefined && (isNaN(options.samplingInterval) || options.samplingInterval < 0)) {
+    samplingInterval = 0;
+    utils.onNextTick(() => {
+      emitter.maybeReportError(
+        new errors.LDInvalidArgumentError(
+          'Invalid sampling interval configured. Sampling interval must be an integer >= 0.'
+        )
+      );
+    });
   }
 
   if (!env) {

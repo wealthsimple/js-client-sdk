@@ -72,42 +72,46 @@ describe('EventSerializer', () => {
   it('includes all user attributes by default', () => {
     const es = EventSerializer({});
     const event = makeEvent(user);
-    expect(es.serialize_events([event])).toEqual([event]);
+    expect(es.serializeEvents([event])).toEqual([event]);
   });
 
   it('hides all except key if all_attrs_private is true', () => {
+    // eslint-disable-next-line camelcase
     const es = EventSerializer({ all_attributes_private: true });
     const event = makeEvent(user);
-    expect(es.serialize_events([event])).toEqual([makeEvent(userWithAllAttrsHidden)]);
+    expect(es.serializeEvents([event])).toEqual([makeEvent(userWithAllAttrsHidden)]);
   });
 
   it('hides some attributes if private_attr_names is set', () => {
+    // eslint-disable-next-line camelcase
     const es = EventSerializer({ private_attribute_names: ['firstName', 'bizzle'] });
     const event = makeEvent(user);
-    expect(es.serialize_events([event])).toEqual([makeEvent(userWithSomeAttrsHidden)]);
+    expect(es.serializeEvents([event])).toEqual([makeEvent(userWithSomeAttrsHidden)]);
   });
 
   it('hides attributes specified in per-user privateAttrs', () => {
     const es = EventSerializer({});
     const event = makeEvent(userSpecifyingOwnPrivateAttr);
-    expect(es.serialize_events([event])).toEqual([makeEvent(userWithOwnSpecifiedAttrHidden)]);
+    expect(es.serializeEvents([event])).toEqual([makeEvent(userWithOwnSpecifiedAttrHidden)]);
   });
 
   it('looks at both per-user privateAttrs and global config', () => {
+    // eslint-disable-next-line camelcase
     const es = EventSerializer({ private_attribute_names: ['firstName', 'bizzle'] });
     const event = makeEvent(userSpecifyingOwnPrivateAttr);
-    expect(es.serialize_events([event])).toEqual([makeEvent(userWithAllAttrsHidden)]);
+    expect(es.serializeEvents([event])).toEqual([makeEvent(userWithAllAttrsHidden)]);
   });
 
   it('strips unknown top-level attributes', () => {
     const es = EventSerializer({});
     const event = makeEvent(userWithUnknownTopLevelAttrs);
-    expect(es.serialize_events([event])).toEqual([makeEvent(user)]);
+    expect(es.serializeEvents([event])).toEqual([makeEvent(user)]);
   });
 
   it('leaves the "anonymous" attribute as is', () => {
+    // eslint-disable-next-line camelcase
     const es = EventSerializer({ all_attributes_private: true });
     const event = makeEvent(anonUser);
-    expect(es.serialize_events([event])).toEqual([makeEvent(anonUserWithAllAttrsHidden)]);
+    expect(es.serializeEvents([event])).toEqual([makeEvent(anonUserWithAllAttrsHidden)]);
   });
 });

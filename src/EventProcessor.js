@@ -42,7 +42,7 @@ export default function EventProcessor(eventsUrl, eventSerializer) {
     }
 
     if (data.length > 0) {
-      data = eventSerializer.serialize_events(data);
+      data = eventSerializer.serializeEvents(data);
       const src = eventsUrl + '?d=' + utils.base64URLEncode(JSON.stringify(data));
       // Detect browser support for CORS
       if ('withCredentials' in new XMLHttpRequest()) {

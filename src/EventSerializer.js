@@ -79,7 +79,7 @@ export default function EventSerializer(config) {
     return filteredProps;
   }
 
-  serializer.serialize_events = events => events.map(serializeEvent);
+  serializer.serializeEvents = events => events.map(serializeEvent);
 
   return serializer;
 }

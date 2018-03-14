@@ -90,6 +90,19 @@ describe('LDClient', () => {
       });
     });
 
+    it('should emit an error when an invalid samplingInterval is specified', done => {
+      const user = { key: 'user' };
+      const client = LDClient.initialize('UNKNOWN_ENVIRONMENT_ID', user, {
+        bootstrap: {},
+        samplingInterval: 'totally not a number',
+      });
+
+      client.on('error', err => {
+        expect(err.message).toEqual('Invalid sampling interval configured. Sampling interval must be an integer >= 0.');
+        done();
+      });
+    });
+
     it('should emit an error when initialize is called without an environment key', done => {
       const user = { key: 'user' };
       const client = LDClient.initialize('', user, {
