@@ -7,44 +7,52 @@ const builtins = require('rollup-plugin-node-builtins');
 const globals = require('rollup-plugin-node-globals');
 const filesize = require('rollup-plugin-filesize');
 
+const pkg = require('./package.json');
 const env = process.env.NODE_ENV;
 const version = process.env.npm_package_version;
-const name = process.env.npm_package_name;
 
-const config = {
-  name,
-  sourcemap: true,
-  globals: {},
-  plugins: [
-    replace({
-      'process.env.NODE_ENV': JSON.stringify(env),
-      VERSION: `'${version}'`,
-    }),
-    globals(),
-    builtins(),
-    resolve({
-      module: true,
-      jsnext: true,
-      main: true,
-      preferBuiltins: true,
-    }),
-    commonjs({
-      ignoreGlobal: true,
-    }),
-    babel({
-      babelrc: true,
-      runtimeHelpers: true,
-    }),
-    filesize(),
-  ],
-};
+let plugins = [
+  replace({
+    'process.env.NODE_ENV': JSON.stringify(env),
+    VERSION: `'${version}'`,
+  }),
+  globals(),
+  builtins(),
+  resolve({
+    module: true,
+    jsnext: true,
+    main: true,
+    preferBuiltins: true,
+  }),
+  commonjs(),
+  babel({
+    runtimeHelpers: true,
+  }),
+  filesize(),
+];
 
 if (env === 'production') {
-  config.plugins.push(
+  plugins = plugins.concat(
     uglify({
       compress: {},
     })
   );
 }
+
+const config = {
+  plugins,
+  input: 'src/index.js',
+  output: [
+    {
+      plugins,
+      name: 'LDClient',
+      file: pkg.browser,
+      format: 'umd',
+      sourcemap: true,
+    },
+    { file: pkg.main, format: 'cjs', sourcemap: true },
+    { file: pkg.module, format: 'es', sourcemap: true },
+  ],
+};
 
 module.exports = config;

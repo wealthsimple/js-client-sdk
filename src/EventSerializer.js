@@ -4,7 +4,7 @@
  *
  * @param {Object} the LaunchDarkly client configuration object
  **/
-function EventSerializer(config) {
+export default function EventSerializer(config) {
   const serializer = {};
   const allAttributesPrivate = config.all_attributes_private;
   const privateAttributeNames = config.private_attribute_names || [];
@@ -27,10 +27,10 @@ function EventSerializer(config) {
     return Object.keys(event)
       .map(key => [key, key === 'user' ? filterUser(event[key]) : event[key]])
       .reduce(
-        (acc, p) => ({
-          ...acc,
-          [p[0]]: p[1],
-        }),
+        (acc, p) =>
+          Object.assign({}, acc, {
+            [p[0]]: p[1],
+          }),
         {}
       );
   }
@@ -83,5 +83,3 @@ function EventSerializer(config) {
 
   return serializer;
 }
-
-module.exports = EventSerializer;
