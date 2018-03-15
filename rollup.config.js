@@ -25,9 +25,7 @@ let plugins = [
     preferBuiltins: true,
   }),
   commonjs(),
-  babel({
-    runtimeHelpers: true,
-  }),
+  babel(),
   filesize(),
 ];
 

@@ -416,6 +416,6 @@ function initialize(env, user, options = {}) {
   return client;
 }
 
-export const version = VERSION;
+const version = VERSION;
 
-export { initialize };
+export default { initialize, version };
