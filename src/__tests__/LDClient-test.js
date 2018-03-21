@@ -1,7 +1,7 @@
 import sinon from 'sinon';
 import semverCompare from 'semver-compare';
 
-import * as LDClient from '../index';
+import LDClient from '../index';
 import * as messages from '../messages';
 import { btoa } from '../utils';
 

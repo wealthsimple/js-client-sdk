@@ -1,6 +1,6 @@
 {
   "name": "ldclient-js",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.1-beta.4",
   "description": "LaunchDarkly SDK for JavaScript",
   "author": "LaunchDarkly <team@launchdarkly.com>",
   "license": "Apache-2.0",
@@ -17,8 +17,6 @@
   "module": "dist/ldclient.es.js",
   "browser": "dist/ldclient.umd.js",
   "scripts": {
-    "preversion": "npm run build",
-    "prebuild": "rimraf dist/**",
     "lint": "eslint --format 'node_modules/eslint-formatter-pretty'",
     "lint:all": "eslint --format 'node_modules/eslint-formatter-pretty' src",
     "format": "npm run format:md && npm run format:js",
@@ -30,7 +28,9 @@
     "build": "cross-env NODE_ENV=development rollup -c rollup.config.js",
     "build:min": "cross-env NODE_ENV=production rollup -c rollup.config.js",
     "build:watch": "cross-env npm run build -- -w",
-    "test": "jest"
+    "test": "jest",
+    "clean": "rimraf dist/**",
+    "prepublishOnly": "npm run build:min"
   },
   "types": "./src/index.d.ts",
   "devDependencies": {
