@@ -1,6 +1,6 @@
 {
   "name": "ldclient-js",
-  "version": "1.5.1-beta.4",
+  "version": "1.5.2-beta.4",
   "description": "LaunchDarkly SDK for JavaScript",
   "author": "LaunchDarkly <team@launchdarkly.com>",
   "license": "Apache-2.0",
@@ -15,7 +15,7 @@
   ],
   "main": "dist/ldclient.cjs.js",
   "module": "dist/ldclient.es.js",
-  "browser": "dist/ldclient.umd.js",
+  "browser": "dist/ldclient.min.js",
   "scripts": {
     "lint": "eslint --format 'node_modules/eslint-formatter-pretty'",
     "lint:all": "eslint --format 'node_modules/eslint-formatter-pretty' src",

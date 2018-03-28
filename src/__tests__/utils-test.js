@@ -1,5 +1,5 @@
 import sinon from 'sinon';
-import { wrapPromiseCallback } from '../utils';
+import { base64URLEncode, wrapPromiseCallback, chunkUserEventsForUrl } from '../utils';
 
 describe('utils', () => {
   describe('wrapPromiseCallback', () => {
@@ -47,6 +47,17 @@ describe('utils', () => {
           done();
         }, 0);
       });
+    });
+  });
+
+  describe('chunkUserEventsForUrl', () => {
+    it('should properly chunk the list of events', () => {
+      const user = { key: 'foo' };
+      const event = { kind: 'identify', key: user.key };
+      const eventLength = base64URLEncode(JSON.stringify(event)).length;
+      const events = [event, event, event, event, event];
+      const chunks = chunkUserEventsForUrl(eventLength * 2, events);
+      expect(chunks).toEqual([[event, event], [event, event], [event]]);
     });
   });
 });

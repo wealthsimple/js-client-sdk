@@ -1,8 +1,46 @@
 import * as utils from './utils';
 
+const MAX_URL_LENGTH = 2000;
+const hasCors = 'withCredentials' in new XMLHttpRequest();
+
+function sendEvents(eventsUrl, events, sync) {
+  const src = eventsUrl + '?d=' + utils.base64URLEncode(JSON.stringify(events));
+
+  const send = onDone => {
+    // Detect browser support for CORS
+    if (hasCors) {
+      /* supports cross-domain requests */
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', src, !sync);
+
+      if (!sync) {
+        xhr.addEventListener('load', onDone);
+      }
+
+      xhr.send();
+    } else {
+      const img = new Image();
+
+      if (!sync) {
+        img.addEventListener('load', onDone);
+      }
+
+      img.src = src;
+    }
+  };
+
+  if (sync) {
+    send();
+  } else {
+    return new Promise(resolve => {
+      send(resolve);
+    });
+  }
+}
+
 export default function EventProcessor(eventsUrl, eventSerializer) {
   const processor = {};
-  const queue = [];
+  let queue = [];
   let initialFlush = true;
 
   processor.enqueue = function(event) {
@@ -10,66 +48,36 @@ export default function EventProcessor(eventsUrl, eventSerializer) {
   };
 
   processor.flush = function(user, sync) {
-    let maxLength = 2000 - eventsUrl.length;
-    let data = [];
+    const finalSync = sync === undefined ? false : sync;
+    const serializedQueue = eventSerializer.serializeEvents(queue);
 
     if (!user) {
       if (initialFlush) {
-        if (console) {
-          if (console.warn) {
-            console.warn(
-              'Be sure to call `identify` in the LaunchDarkly client: http://docs.launchdarkly.com/docs/running-an-ab-test#include-the-client-side-snippet'
-            );
-          }
+        if (console && console.warn) {
+          console.warn(
+            'Be sure to call `identify` in the LaunchDarkly client: http://docs.launchdarkly.com/docs/running-an-ab-test#include-the-client-side-snippet'
+          );
         }
       }
-      return false;
+      return Promise.resolve();
     }
 
     initialFlush = false;
-    while (maxLength > 0 && queue.length > 0) {
-      const event = queue.pop();
-      event.user = user;
-      maxLength -= utils.base64URLEncode(JSON.stringify(event)).length;
-      // If we are over the max size, put this one back on the queue
-      // to try in the next round, unless this event alone is larger
-      // than the limit, in which case, screw it, and try it anyway.
-      if (maxLength < 0 && data.length > 0) {
-        queue.push(event);
-      } else {
-        data.push(event);
-      }
+
+    if (serializedQueue.length === 0) {
+      return Promise.resolve();
     }
 
-    if (data.length > 0) {
-      data = eventSerializer.serializeEvents(data);
-      const src = eventsUrl + '?d=' + utils.base64URLEncode(JSON.stringify(data));
-      // Detect browser support for CORS
-      if ('withCredentials' in new XMLHttpRequest()) {
-        /* Supports cross-domain requests */
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', src, !sync);
-        xhr.send();
-      } else {
-        const img = new Image();
-        img.src = src;
-      }
+    const chunks = utils.chunkUserEventsForUrl(MAX_URL_LENGTH - eventsUrl.length, serializedQueue);
+
+    const results = [];
+    for (const i = 0; i < chunks.length; i++) {
+      results.push(sendEvents(eventsUrl, chunks[i], finalSync));
     }
 
-    // If the queue is not empty, call settimeout to flush it again
-    // with a 0 timeout (stack-less recursion)
-    // Or, just recursively call flush_queue with the remaining elements
-    // if we're doing this on unload
-    if (queue.length > 0) {
-      if (sync) {
-        processor.flush(user, sync);
-      } else {
-        setTimeout(() => {
-          processor.flush(user);
-        }, 0);
-      }
-    }
-    return false;
+    queue = [];
+
+    return sync ? Promise.resolve() : Promise.all(results);
   };
 
   return processor;

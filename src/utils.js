@@ -74,3 +74,41 @@ export function wrapPromiseCallback(promise, callback) {
     }
   );
 }
+
+/**
+ * Returns an array of event groups each of which can be safely URL-encoded
+ * without hitting the safe maximum URL length of certain browsers.
+ * 
+ * @param {number} maxLength maximum URL length targeted
+ * @param {Array[Object}]} events queue of events to divide
+ * @returns Array[Array[Object]]
+ */
+export function chunkUserEventsForUrl(maxLength, events) {
+  var allEvents = events.slice(0);
+  var remainingSpace = maxLength;
+  var allChunks = [];
+  var chunk;
+
+  while (allEvents.length > 0) {
+    chunk = [];
+
+    while (remainingSpace > 0) {
+      var event = allEvents.pop();
+      if (!event) { break; }
+      remainingSpace = remainingSpace - base64URLEncode(JSON.stringify(event)).length;
+      // If we are over the max size, put this one back on the queue
+      // to try in the next round, unless this event alone is larger 
+      // than the limit, in which case, screw it, and try it anyway.
+      if (remainingSpace < 0 && chunk.length > 0) {
+        allEvents.push(event);
+      } else {
+        chunk.push(event);
+      }
+    }
+
+    remainingSpace = maxLength;
+    allChunks.push(chunk);
+  }
+
+  return allChunks;
+}
