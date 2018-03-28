@@ -15,7 +15,7 @@
   ],
   "main": "dist/ldclient.cjs.js",
   "module": "dist/ldclient.es.js",
-  "browser": "dist/ldclient.min.js",
+  "browser": "dist/ldclient.umd.js",
   "scripts": {
     "lint": "eslint --format 'node_modules/eslint-formatter-pretty'",
     "lint:all": "eslint --format 'node_modules/eslint-formatter-pretty' src",
