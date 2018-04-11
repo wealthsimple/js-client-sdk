@@ -71,7 +71,7 @@ export default function EventProcessor(eventsUrl, eventSerializer) {
     const chunks = utils.chunkUserEventsForUrl(MAX_URL_LENGTH - eventsUrl.length, serializedQueue);
 
     const results = [];
-    for (const i = 0; i < chunks.length; i++) {
+    for (let i = 0; i < chunks.length; i++) {
       results.push(sendEvents(eventsUrl, chunks[i], finalSync));
     }
 

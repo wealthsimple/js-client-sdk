@@ -9,7 +9,6 @@ env:
 plugins:
   - babel
   - prettier
-  - mocha
 globals:
   VERSION: true
 rules:

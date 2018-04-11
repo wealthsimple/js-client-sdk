@@ -1,10 +1,4 @@
 ---
-env:
-  mocha: true
-plugins:
-  - chai-friendly
-rules:
-  no-unused-expressions: off
 globals:
   VERSION: true
   sinon: true

@@ -13,6 +13,7 @@ import * as errors from './errors';
 const readyEvent = 'ready';
 const changeEvent = 'change';
 const flushInterval = 2000;
+const locationWatcherInterval = 300;
 
 function initialize(env, user, options = {}) {
   const baseUrl = options.baseUrl || 'https://app.launchdarkly.com';
@@ -22,15 +23,16 @@ function initialize(env, user, options = {}) {
   const sendEvents = typeof options.sendEvents === 'undefined' ? true : config.sendEvents;
   const environment = env;
   const emitter = EventEmitter();
-  const stream = Stream(streamUrl, environment);
+  const stream = Stream(streamUrl, environment, hash, options.useReport);
   const events = EventProcessor(eventsUrl + '/a/' + environment + '.gif', EventSerializer(options));
   const requestor = Requestor(baseUrl, environment, options.useReport);
   const seenRequests = {};
   let samplingInterval = parseInt(options.samplingInterval, 10) || 0;
-  let flags = typeof options.bootstrap === 'object' ? options.bootstrap : {};
+  let flags = typeof options.bootstrap === 'object' ? utils.transformValuesToVersionedValues(options.bootstrap) : {};
   let goalTracker;
   let useLocalStorage;
   let goals;
+  let subscribedToChangeEvents;
 
   function lsKey(env, user) {
     let key = '';
@@ -93,7 +95,7 @@ function initialize(env, user, options = {}) {
       data: null,
       url: window.location.href,
       user: ident.getUser(),
-      creationDate: (new Date()).getTime()
+      creationDate: new Date().getTime(),
     };
 
     if (kind === 'click') {
@@ -116,6 +118,9 @@ function initialize(env, user, options = {}) {
             updateSettings(settings);
           }
           resolve(settings);
+          if (subscribedToChangeEvents) {
+            connectStream();
+          }
         });
       }),
       onDone
@@ -123,16 +128,16 @@ function initialize(env, user, options = {}) {
   }
 
   function flush(onDone) {
-    return utils.wrapPromiseCallback(new Promise(function(resolve) {
-      return sendEvents ? resolve(events.flush(ident.getUser())) : resolve();
-    }.bind(this), onDone));
+    return utils.wrapPromiseCallback(
+      new Promise(resolve => (sendEvents ? resolve(events.flush(ident.getUser())) : resolve()), onDone)
+    );
   }
 
   function variation(key, defaultValue) {
     let value;
 
-    if (flags && flags.hasOwnProperty(key)) {
-      value = flags[key] === null ? defaultValue : flags[key];
+    if (flags && flags.hasOwnProperty(key) && !flags[key].deleted) {
+      value = flags[key].value === null ? defaultValue : flags[key].value;
     } else {
       value = defaultValue;
     }
@@ -199,36 +204,91 @@ function initialize(env, user, options = {}) {
       kind: 'custom',
       key: key,
       data: data,
+      user: ident.getUser(),
       url: window.location.href,
       creationDate: new Date().getTime(),
     });
   }
 
   function connectStream() {
-    stream.connect(() => {
-      requestor.fetchFlagSettings(ident.getUser(), hash, (err, settings) => {
-        if (err) {
-          emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
+    if (!ident.getUser()) {
+      return;
+    }
+    stream.disconnect();
+    stream.connect(ident.getUser(), {
+      ping: function() {
+        requestor.fetchFlagSettings(ident.getUser(), hash, (err, settings) => {
+          if (err) {
+            emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
+          }
+          updateSettings(settings);
+        });
+      },
+      put: function(e) {
+        const data = JSON.parse(e.data);
+        updateSettings(data);
+      },
+      patch: function(e) {
+        const data = JSON.parse(e.data);
+        if (!flags[data.key] || flags[data.key].version < data.version) {
+          const mods = {};
+          const oldFlag = flags[data.key];
+          flags[data.key] = { version: data.version, value: data.value };
+          if (oldFlag) {
+            mods[data.key] = { previous: oldFlag.value, current: data.value };
+          } else {
+            mods[data.key] = { current: data.value };
+          }
+          postProcessSettingsUpdate(mods);
         }
-        updateSettings(settings);
-      });
+      },
+      delete: function(e) {
+        const data = JSON.parse(e.data);
+        if (!flags[data.key] || flags[data.key].version < data.version) {
+          const mods = {};
+          if (flags[data.key] && !flags[data.key].deleted) {
+            mods[data.key] = { previous: flags[data.key].value };
+          }
+          flags[data.key] = { version: data.version, deleted: true };
+          postProcessSettingsUpdate(mods);
+        }
+      },
     });
   }
 
-  function updateSettings(settings) {
-    if (!settings) {
+  function updateSettings(newFlags) {
+    const changes = {};
+
+    if (!newFlags) {
       return;
     }
 
-    const changes = utils.modifications(flags, settings);
-    const keys = Object.keys(changes);
+    for (const key in flags) {
+      if (flags.hasOwnProperty(key)) {
+        if (newFlags[key] && newFlags[key].value !== flags[key].value) {
+          changes[key] = { previous: flags[key].value, current: newFlags[key].value };
+        } else if (!newFlags[key] || newFlags[key].deleted) {
+          changes[key] = { previous: flags[key].value };
+        }
+      }
+    }
+    for (const key in newFlags) {
+      if (newFlags.hasOwnProperty(key) && (!flags[key] || flags[key].deleted)) {
+        changes[key] = { current: newFlags[key].value };
+      }
+    }
 
-    flags = settings;
+    flags = newFlags;
+    postProcessSettingsUpdate(changes);
+  }
+
+  function postProcessSettingsUpdate(changes) {
+    const keys = Object.keys(changes);
 
     if (useLocalStorage) {
       store.clear(localStorageKey);
       localStorageKey = lsKey(environment, ident.getUser());
-      store.set(localStorageKey, JSON.stringify(flags));
+      store.set(localStorageKey, JSON.stringify(utils.transformValuesToUnversionedValues(flags)));
     }
 
     if (keys.length > 0) {
@@ -246,6 +306,7 @@ function initialize(env, user, options = {}) {
 
   function on(event, handler, context) {
     if (event.substr(0, changeEvent.length) === changeEvent) {
+      subscribedToChangeEvents = true;
       if (!stream.isConnected()) {
         connectStream();
       }
@@ -255,7 +316,13 @@ function initialize(env, user, options = {}) {
     }
   }
 
-  function off() {
+  function off(event) {
+    if (event === changeEvent) {
+      if ((subscribedToChangeEvents = true)) {
+        subscribedToChangeEvents = false;
+        stream.disconnect();
+      }
+    }
     emitter.off.apply(emitter, Array.prototype.slice.call(arguments));
   }
 
@@ -314,7 +381,7 @@ function initialize(env, user, options = {}) {
 
     // check if localStorage data is corrupted, if so clear it
     try {
-      flags = JSON.parse(store.get(localStorageKey));
+      flags = utils.transformValuesToVersionedValues(JSON.parse(store.get(localStorageKey)));
     } catch (error) {
       store.clear(localStorageKey);
     }
@@ -325,7 +392,7 @@ function initialize(env, user, options = {}) {
           emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
         }
         flags = settings;
-        settings && store.set(localStorageKey, JSON.stringify(flags));
+        settings && store.set(localStorageKey, JSON.stringify(utils.transformValuesToUnversionedValues(flags)));
         emitter.emit(readyEvent);
       });
     } else {
@@ -340,7 +407,7 @@ function initialize(env, user, options = {}) {
         if (err) {
           emitter.maybeReportError(new errors.LDFlagFetchError(messages.errorFetchingFlags(err)));
         }
-        settings && store.set(localStorageKey, JSON.stringify(settings));
+        settings && store.set(localStorageKey, JSON.stringify(utils.transformValuesToUnversionedValues(settings)));
       });
     }
   } else {
@@ -362,13 +429,32 @@ function initialize(env, user, options = {}) {
     }
   }
 
-  function attachHistoryListeners() {
+  function watchLocation(interval, callback) {
+    let previousUrl = location.href;
+    let currentUrl;
+
+    function checkUrl() {
+      currentUrl = location.href;
+
+      if (currentUrl !== previousUrl) {
+        previousUrl = currentUrl;
+        callback();
+      }
+    }
+
+    function poll(fn, interval) {
+      fn();
+      setTimeout(() => {
+        poll(fn, interval);
+      }, interval);
+    }
+
+    poll(checkUrl, interval);
+
     if (!!(window.history && history.pushState)) {
-      window.removeEventListener('popstate',refreshGoalTracker);
-      window.addEventListener('popstate', refreshGoalTracker);
+      window.addEventListener('popstate', checkUrl);
     } else {
-      window.removeEventListener('hashchange', refreshGoalTracker);
-      window.addEventListener('hashchange', refreshGoalTracker);
+      window.addEventListener('hashchange', checkUrl);
     }
   }
 
@@ -381,7 +467,7 @@ function initialize(env, user, options = {}) {
     if (g && g.length > 0) {
       goals = g;
       goalTracker = GoalTracker(goals, sendGoalEvent);
-      attachHistoryListeners();
+      watchLocation(locationWatcherInterval, refreshGoalTracker);
     }
   });
 
@@ -421,7 +507,7 @@ function initialize(env, user, options = {}) {
     on: on,
     off: off,
     flush: flush,
-    allFlags: allFlags
+    allFlags: allFlags,
   };
 
   return client;

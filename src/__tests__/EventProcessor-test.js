@@ -7,6 +7,7 @@ describe('EventProcessor', () => {
   let sandbox;
   let xhr;
   let requests = [];
+  let warnSpy;
   const serializer = EventSerializer({});
 
   beforeEach(() => {
@@ -16,11 +17,13 @@ describe('EventProcessor', () => {
     xhr.onCreate = function(xhr) {
       requests.push(xhr);
     };
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
     sandbox.restore();
     xhr.restore();
+    warnSpy.mockRestore();
   });
 
   it('should warn about missing user on initial flush', () => {

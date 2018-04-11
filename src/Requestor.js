@@ -55,8 +55,13 @@ export default function Requestor(baseUrl, environment, useReport) {
     }
 
     const wrappedCallback = (function(currentCallback) {
-      return function() {
-        currentCallback.apply(null, arguments);
+      return function(error, result) {
+        let finalResult = result;
+        // if we got flags, convert them to the more verbose format used by the eval stream
+        if (result) {
+          finalResult = utils.transformValuesToVersionedValues(result);
+        }
+        currentCallback(error, finalResult);
         flagSettingsRequest = null;
         lastFlagSettingsCallback = null;
       };

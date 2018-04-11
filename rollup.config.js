@@ -8,13 +8,13 @@ const globals = require('rollup-plugin-node-globals');
 const filesize = require('rollup-plugin-filesize');
 
 const pkg = require('./package.json');
-const env = process.env.NODE_ENV;
+const env = process.env.NODE_ENV || 'development';
 const version = process.env.npm_package_version;
 
 let plugins = [
   replace({
     'process.env.NODE_ENV': JSON.stringify(env),
-    VERSION: `'${version}'`,
+    VERSION: JSON.stringify(version),
   }),
   globals(),
   builtins(),
@@ -44,7 +44,7 @@ const config = {
     {
       plugins,
       name: 'LDClient',
-      file: pkg.browser,
+      file: process.env.NODE_ENV === 'production' ? './dist/ldclient.min.js' : './dist/ldclient.js',
       format: 'umd',
       sourcemap: true,
     },
