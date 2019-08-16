@@ -1,45 +1,23 @@
 import * as common from 'launchdarkly-js-sdk-common';
-import browserPlatform from './browserPlatform';
-import GoalManager from './GoalManager';
+import rnPlatform from './browserPlatform';
 
-const goalsEvent = 'goalsReady';
 const extraDefaults = {
-  fetchGoals: true,
+  fetchGoals: false,
 };
 
 // Pass our platform object to the common code to create the browser version of the client
 export function initialize(env, user, options = {}) {
-  const platform = browserPlatform(options);
+  const platform = rnPlatform();
   const clientVars = common.initialize(env, user, options, platform, extraDefaults);
 
   const client = clientVars.client;
-  const validatedOptions = clientVars.options;
-  const emitter = clientVars.emitter;
 
-  const goalsPromise = new Promise(resolve => {
-    const onGoals = emitter.on(goalsEvent, () => {
-      emitter.off(goalsEvent, onGoals);
-      resolve();
-    });
-  });
-  client.waitUntilGoalsReady = () => goalsPromise;
+  client.waitUntilGoalsReady = () => Promise.resolve();
 
-  if (validatedOptions.fetchGoals) {
-    const goalManager = GoalManager(clientVars, () => emitter.emit(goalsEvent));
-    platform.customEventFilter = goalManager.goalKeyExists;
-  } else {
-    emitter.emit(goalsEvent);
-  }
+  clientVars.start();
 
-  if (document.readyState !== 'complete') {
-    window.addEventListener('load', clientVars.start);
-  } else {
-    clientVars.start();
-  }
-  window.addEventListener('beforeunload', () => {
-    platform.pageIsClosing = true;
-    client.close();
-  });
+  // the browser client would call client.close() on page 'beforeunload' but
+  // we'll need to hoist that behaviour into the parent apps
 
   return client;
 }
@@ -47,10 +25,3 @@ export function initialize(env, user, options = {}) {
 export const createConsoleLogger = common.createConsoleLogger;
 
 export const version = common.version;
-
-function deprecatedInitialize(env, user, options = {}) {
-  console && console.warn && console.warn(common.messages.deprecated('default export', 'named LDClient export'));
-  return initialize(env, user, options);
-}
-
-export default { initialize: deprecatedInitialize, version };
